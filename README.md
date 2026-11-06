@@ -18,7 +18,7 @@
 
 ---
 
-![Fork-and-Flush — periodically fork K fresh-context workers from the same workspace and continue from the highest-scoring trajectory](assets/fig_teaser_cartoon.pdf)
+![Fork-and-Flush — periodically fork K fresh-context workers from the same workspace and continue from the highest-scoring trajectory](assets/fig_teaser_cartoon.svg)
 
 **Single long agent runs get stuck refining one early approach.** Fork-and-Flush fixes that: periodically fork K workers from the best workspace, each with an EMPTY chat context, run each briefly, keep the best. Both halves are needed — fork alone or flush alone gives less than both together.
 
@@ -104,7 +104,7 @@ forknflush-plugin/                 # the plugin
 ├── .claude-plugin/plugin.json
 ├── package.json
 └── skills/fork-and-flush/SKILL.md # the skill (Agent Skills / agentskills.io format)
-assets/                            # teaser figure (original PDF + PNG render)
+assets/                            # teaser figure (SVG for README, PDF original)
 install.sh                         # macOS / Linux installer
 install.ps1                        # Windows installer
 ```
