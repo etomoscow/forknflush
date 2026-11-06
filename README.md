@@ -53,7 +53,7 @@ Then, on any optimization task:
 curl -fsSL https://raw.githubusercontent.com/etomoscow/forknflush/main/install.sh | bash -s <platform>
 ```
 
-Supported platforms: `claude`, `pi`, `codex`, `opencode`, `hermes`. The installer clones this repo to `~/.forknflush/repo` and symlinks the skill into the platform's skills directory, so `./install.sh --update` (or re-running the command) keeps every install current.
+Supported platforms: `claude`, `pi`, `codex`, `opencode`, `hermes`, or `all` (you can also pass multiple, e.g. `bash -s claude codex`). The installer clones this repo to `~/.forknflush/repo` and symlinks the skill into the platform's skills directory, so `./install.sh --update` (or re-running the command) keeps every install current.
 
 ```bash
 # Codex (skills land in ~/.agents/skills; invoke with $fork-and-flush)
@@ -102,8 +102,9 @@ Full protocol: [`forknflush-plugin/skills/fork-and-flush/SKILL.md`](forknflush-p
 .claude-plugin/plugin.json
 forknflush-plugin/                 # the plugin
 ├── .claude-plugin/plugin.json
-├── package.json
-└── skills/fork-and-flush/SKILL.md # the skill (Agent Skills / agentskills.io format)
+└── skills/fork-and-flush/
+    ├── SKILL.md                   # the skill (Agent Skills / agentskills.io format)
+    └── agents/openai.yaml         # Codex / ChatGPT UI metadata
 assets/                            # teaser figure (SVG for README, PDF original)
 install.sh                         # macOS / Linux installer
 install.ps1                        # Windows installer
@@ -114,8 +115,10 @@ install.ps1                        # Windows installer
 ```bash
 ./install.sh                        # prompt for platform
 ./install.sh codex                  # install for one platform
+./install.sh claude codex           # install for multiple platforms at once
+./install.sh all                    # install for all supported platforms
 ./install.sh --update               # git pull (skills update through symlinks)
-./install.sh --uninstall codex      # remove links
+./install.sh --uninstall codex      # remove links (or --uninstall all)
 ```
 
 Environment overrides: `FF_REPO_URL` (clone URL), `FF_DIR` (checkout destination).

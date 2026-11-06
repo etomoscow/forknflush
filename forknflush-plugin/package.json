@@ -1,7 +1,0 @@
-{
-  "name": "@forknflush/skill",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "description": "Fork-and-Flush skill — instruction-only, no runtime dependencies"
-}

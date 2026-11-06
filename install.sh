@@ -2,15 +2,16 @@
 # forknflush installer (macOS / Linux)
 #
 # Usage:
-#   ./install.sh                       Prompt for platform
-#   ./install.sh <platform>            Install for <platform>
-#   ./install.sh --update              Pull latest changes
-#   ./install.sh --uninstall <plat>    Remove links for <plat>
+#   ./install.sh                          Prompt for platform
+#   ./install.sh <platform>...            Install for one or more platforms (or "all")
+#   ./install.sh --update                 Pull latest changes
+#   ./install.sh --uninstall <plat>...    Remove links for platform(s) (or "all")
 #   ./install.sh --help
 #
 # Curl-pipe usage:
 #   curl -fsSL https://raw.githubusercontent.com/etomoscow/forknflush/main/install.sh | bash
 #   curl -fsSL https://raw.githubusercontent.com/etomoscow/forknflush/main/install.sh | bash -s codex
+#   curl -fsSL https://raw.githubusercontent.com/etomoscow/forknflush/main/install.sh | bash -s all
 #
 # Environment:
 #   FF_REPO_URL  Override clone URL (default: official GitHub repo)
@@ -20,7 +21,6 @@ set -euo pipefail
 
 REPO_URL="${FF_REPO_URL:-https://github.com/etomoscow/forknflush.git}"
 REPO_DIR="${FF_DIR:-$HOME/.forknflush/repo}"
-PLUGIN_LINK="$HOME/.forknflush-plugin"
 
 # Platform table — id|skills-target-dir|style
 # style "per-skill": one symlink per skill into the target dir
@@ -44,15 +44,27 @@ resolve_platform() {
   row="$(platforms_table | awk -F'|' -v id="$id" '$1==id {print; exit}')"
   if [[ -z "$row" ]]; then
     printf 'Unknown platform: %s\n' "$id" >&2
-    printf 'Supported: %s\n' "$(platform_ids | tr '\n' ' ')" >&2
+    printf 'Supported: %s all\n' "$(platform_ids | tr '\n' ' ')" >&2
     exit 1
   fi
   printf '%s\n' "$row"
 }
 
+expand_platforms() {
+  local arg
+  for arg in "$@"; do
+    if [[ "$arg" == "all" ]]; then
+      platform_ids
+    else
+      printf '%s\n' "$arg"
+    fi
+  done
+}
+
 prompt_platform() {
   local ids=()
   while IFS= read -r id; do ids+=("$id"); done < <(platform_ids)
+  ids+=("all")
 
   printf 'Which platform are you installing for?\n' >&2
   local i=1
@@ -140,11 +152,11 @@ unlink_skills() {
       if [[ -d "$(skills_root)" ]]; then
         local skill
         while IFS= read -r skill; do
-          [[ -L "$target/$skill" ]] && rm -f "$target/$skill"
+          if [[ -L "$target/$skill" ]]; then
+            rm -f "$target/$skill"
+          fi
         done < <(list_skills)
       else
-        # Checkout is gone — scan the target dir for stale links pointing into
-        # our plugin tree so we can still clean up.
         local link resolved
         for link in "$target"/*; do
           [[ -L "$link" ]] || continue
@@ -155,64 +167,67 @@ unlink_skills() {
       fi
       ;;
     folder)
-      [[ -L "$target/forknflush" ]] && rm -f "$target/forknflush"
+      if [[ -L "$target/forknflush" ]]; then
+        rm -f "$target/forknflush"
+      fi
       ;;
   esac
 }
 
-link_plugin_root() {
-  if [[ -L "$PLUGIN_LINK" || -e "$PLUGIN_LINK" ]]; then
-    printf '  • %s already exists, leaving as-is\n' "$PLUGIN_LINK"
-  else
-    ln -s "$REPO_DIR/forknflush-plugin" "$PLUGIN_LINK"
-    printf '  ✓ %s → %s\n' "$PLUGIN_LINK" "$REPO_DIR/forknflush-plugin"
+install_one() {
+  local id="$1"
+  local row target style
+  row="$(resolve_platform "$id")"
+  target="$(printf '%s\n' "$row" | cut -d'|' -f2)"
+  style="$(printf '%s\n' "$row" | cut -d'|' -f3)"
+
+  printf -- '→ Linking skills for %s (%s → %s)\n' "$id" "$style" "$target"
+  link_skills "$target" "$style"
+
+  if [[ "$id" == "claude" ]]; then
+    printf '  Tip (Claude Code): you can also install via `/plugin marketplace add etomoscow/forknflush` then `/plugin install forknflush`.\n'
+  elif [[ "$id" == "codex" ]]; then
+    printf '  Tip (Codex): invoke with $fork-and-flush (not /fork-and-flush).\n'
+  elif [[ "$id" == "pi" ]]; then
+    printf '  Tip (Pi): invoke with /skill:fork-and-flush.\n'
+  elif [[ "$id" == "hermes" ]]; then
+    printf '  Tip (Hermes): ~/.hermes/skills loads automatically; project-local skills need `hermes skills trust`.\n'
   fi
 }
 
 cmd_install() {
-  local id="$1"
-  local row target style
-  row="$(resolve_platform "$id")"
-  target="$(printf '%s\n' "$row" | cut -d'|' -f2)"
-  style="$(printf '%s\n' "$row" | cut -d'|' -f3)"
+  local platforms=()
+  while IFS= read -r p; do
+    [[ -n "$p" ]] || continue
+    resolve_platform "$p" >/dev/null
+    platforms+=("$p")
+  done < <(expand_platforms "$@")
 
   clone_or_update
-  printf -- '→ Linking skills for %s (%s → %s)\n' "$id" "$style" "$target"
-  link_skills "$target" "$style"
-  printf -- '→ Linking universal plugin root\n'
-  link_plugin_root
-
-  printf '\n✓ Installed forknflush for %s\n' "$id"
-  printf '  Restart your CLI to pick up the skills.\n'
-  if [[ "$id" == "claude" ]]; then
-    printf '\n  Tip: Claude Code can also install this repo directly as a plugin:\n'
-    printf '       /plugin marketplace add etomoscow/forknflush\n'
-    printf '       /plugin install forknflush\n'
-  fi
-  if [[ "$id" == "codex" ]]; then
-    printf '\n  Tip: Codex invokes skills with $ instead of / — type $fork-and-flush, not /fork-and-flush.\n'
-  fi
-  if [[ "$id" == "pi" ]]; then
-    printf '\n  Tip: Pi invokes skills with /skill:fork-and-flush.\n'
-  fi
-  if [[ "$id" == "hermes" ]]; then
-    printf '\n  Tip: project-local Hermes skills need `hermes skills trust`; ~/.hermes/skills loads unconditionally.\n'
-  fi
+  local id
+  for id in "${platforms[@]}"; do
+    install_one "$id"
+  done
+  printf '\n✓ Installed forknflush (%s). Restart your CLI to pick up the skill.\n' "${platforms[*]}"
 }
 
 cmd_uninstall() {
-  local id="$1"
-  local row target style
-  row="$(resolve_platform "$id")"
-  target="$(printf '%s\n' "$row" | cut -d'|' -f2)"
-  style="$(printf '%s\n' "$row" | cut -d'|' -f3)"
+  local platforms=()
+  while IFS= read -r p; do
+    [[ -n "$p" ]] || continue
+    resolve_platform "$p" >/dev/null
+    platforms+=("$p")
+  done < <(expand_platforms "$@")
 
-  printf -- '→ Removing skill links for %s\n' "$id"
-  unlink_skills "$target" "$style"
-  if [[ -L "$PLUGIN_LINK" ]]; then
-    rm -f "$PLUGIN_LINK"
-    printf '  ✓ removed %s\n' "$PLUGIN_LINK"
-  fi
+  local id row target style
+  for id in "${platforms[@]}"; do
+    row="$(resolve_platform "$id")"
+    target="$(printf '%s\n' "$row" | cut -d'|' -f2)"
+    style="$(printf '%s\n' "$row" | cut -d'|' -f3)"
+    printf -- '→ Removing skill links for %s\n' "$id"
+    unlink_skills "$target" "$style"
+  done
+
   if [[ -d "$REPO_DIR" ]]; then
     printf '\nThe checkout at %s was kept (other platforms may still use it).\n' "$REPO_DIR"
     printf 'To remove it: rm -rf "%s"\n' "$REPO_DIR"
@@ -233,13 +248,14 @@ usage() {
 forknflush installer
 
 Usage:
-  install.sh [<platform>]            Install for <platform> (or prompt if omitted)
-  install.sh --update                Pull latest changes (skills update through symlinks)
-  install.sh --uninstall <platform>  Remove links for <platform>
+  install.sh [<platform>...]            Install for platform(s) or "all" (prompts if omitted)
+  install.sh --update                   Pull latest changes (skills update through symlinks)
+  install.sh --uninstall <platform>...  Remove links for platform(s) or "all"
   install.sh --help
 
 Supported platforms:
 $(platform_ids | sed 's/^/  - /')
+  - all
 
 Environment:
   FF_REPO_URL  Override clone URL (default: official repo)
@@ -257,12 +273,12 @@ main() {
       ;;
     --uninstall)
       shift
-      if [[ -z "${1:-}" ]]; then
-        printf '%s\n' '--uninstall requires a platform argument' >&2
+      if [[ $# -eq 0 ]]; then
+        printf '%s\n' '--uninstall requires at least one platform argument (or "all")' >&2
         usage >&2
         exit 1
       fi
-      cmd_uninstall "$1"
+      cmd_uninstall "$@"
       ;;
     "")
       local id
@@ -275,7 +291,7 @@ main() {
       exit 1
       ;;
     *)
-      cmd_install "$1"
+      cmd_install "$@"
       ;;
   esac
 }

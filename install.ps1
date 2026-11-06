@@ -3,18 +3,19 @@
   forknflush installer for Windows (PowerShell).
 
 .DESCRIPTION
-  Clones the repo and creates skill symlinks/junctions for the chosen platform.
+  Clones the repo and creates skill symlinks/junctions for the chosen platform(s).
 
 .EXAMPLE
   ./install.ps1                       # prompt for platform
   ./install.ps1 codex                 # install for codex
+  ./install.ps1 all                   # install for all platforms
   ./install.ps1 -Update               # pull latest changes
   ./install.ps1 -Uninstall codex      # remove links for codex
 #>
 
 param(
-    [Parameter(Position = 0)]
-    [string]$Platform,
+    [Parameter(Position = 0, ValueFromRemainingArguments = $true)]
+    [string[]]$Platform,
     [switch]$Update,
     [string]$Uninstall,
     [switch]$Help
@@ -22,9 +23,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$RepoUrl    = if ($env:FF_REPO_URL) { $env:FF_REPO_URL } else { 'https://github.com/etomoscow/forknflush.git' }
-$RepoDir    = if ($env:FF_DIR)      { $env:FF_DIR }      else { Join-Path $HOME '.forknflush\repo' }
-$PluginLink = Join-Path $HOME '.forknflush-plugin'
+$RepoUrl = if ($env:FF_REPO_URL) { $env:FF_REPO_URL } else { 'https://github.com/etomoscow/forknflush.git' }
+$RepoDir = if ($env:FF_DIR)      { $env:FF_DIR }      else { Join-Path $HOME '.forknflush\repo' }
 
 # Platform table - Target = skills directory; Style = "per-skill" | "folder"
 $Platforms = [ordered]@{
@@ -40,13 +40,13 @@ function Show-Usage {
 forknflush installer (Windows)
 
 Usage:
-  install.ps1 [<platform>]                Install for <platform> (or prompt if omitted)
+  install.ps1 [<platform>...]             Install for platform(s) or 'all' (prompts if omitted)
   install.ps1 -Update                     Pull latest changes
-  install.ps1 -Uninstall <platform>       Remove links for <platform>
+  install.ps1 -Uninstall <platform>       Remove links for <platform> or 'all'
   install.ps1 -Help
 
 Supported platforms:
-$($Platforms.Keys -join ', ')
+$($Platforms.Keys -join ', '), all
 
 Environment:
   FF_REPO_URL  Override clone URL (default: official repo)
@@ -57,19 +57,34 @@ Environment:
 function Resolve-Platform {
     param([string]$Id)
     if (-not $Platforms.Contains($Id)) {
-        Write-Error "Unknown platform: $Id. Supported: $($Platforms.Keys -join ', ')"
+        Write-Error "Unknown platform: $Id. Supported: $($Platforms.Keys -join ', '), all"
     }
     return $Platforms[$Id]
 }
 
+function Expand-Platforms {
+    param([string[]]$Ids)
+    $result = @()
+    foreach ($id in $Ids) {
+        if ($id -eq 'all') {
+            $result += $Platforms.Keys
+        }
+        else {
+            $null = Resolve-Platform $id
+            $result += $id
+        }
+    }
+    return $result
+}
+
 function Prompt-Platform {
-    $ids = @($Platforms.Keys)
+    $ids = @($Platforms.Keys) + @('all')
     Write-Host 'Which platform are you installing for?' -ForegroundColor Cyan
     for ($i = 0; $i -lt $ids.Count; $i++) {
         Write-Host ("  {0}) {1}" -f ($i + 1), $ids[$i])
     }
     $choice = Read-Host "Choose [1-$($ids.Count)]"
-    if (-not $choice -match '^\d+$' -or [int]$choice -lt 1 -or [int]$choice -gt $ids.Count) {
+    if (-not ($choice -match '^\d+$') -or [int]$choice -lt 1 -or [int]$choice -gt $ids.Count) {
         Write-Error "Invalid choice: '$choice'. Pass the platform as an argument instead, e.g.: install.ps1 codex"
     }
     return $ids[[int]$choice - 1]
@@ -97,9 +112,22 @@ function Get-Skills {
     Get-ChildItem -Path $Root -Directory | ForEach-Object { $_.Name }
 }
 
+function Remove-SafeLink {
+    param([string]$Path)
+    if (-not (Test-Path $Path)) { return }
+    $item = Get-Item $Path -Force
+    if ($item.LinkType) {
+        # Delete the reparse point itself without recursing into its target.
+        $item.Delete()
+    }
+    else {
+        Write-Error "Refusing to overwrite non-link directory: $Path"
+    }
+}
+
 function New-DirLink {
     param([string]$LinkPath, [string]$TargetPath)
-    if (Test-Path $LinkPath) { Remove-Item -Force -Recurse $LinkPath }
+    if (Test-Path $LinkPath) { Remove-SafeLink -Path $LinkPath }
     $parent = Split-Path -Parent $LinkPath
     New-Item -ItemType Directory -Force -Path $parent | Out-Null
     try {
@@ -138,70 +166,48 @@ function Remove-Skills {
             if (Test-Path (Get-SkillsRoot)) {
                 foreach ($skill in (Get-Skills (Get-SkillsRoot))) {
                     $link = Join-Path $Target $skill
-                    if ((Test-Path $link) -and (Get-Item $link -Force).LinkType) { Remove-Item -Force $link }
+                    if ((Test-Path $link) -and (Get-Item $link -Force).LinkType) {
+                        (Get-Item $link -Force).Delete()
+                    }
                 }
             }
             else {
-                # Checkout is gone — remove stale links pointing into our plugin tree.
                 foreach ($link in (Get-ChildItem -Path $Target -Force -ErrorAction SilentlyContinue)) {
                     if ($link.LinkType -and $link.Target -and ($link.Target -like '*forknflush-plugin\skills*')) {
-                        Remove-Item -Force $link.FullName
+                        $link.Delete()
                     }
                 }
             }
         }
         'folder' {
             $link = Join-Path $Target 'forknflush'
-            if ((Test-Path $link) -and (Get-Item $link -Force).LinkType) { Remove-Item -Force $link }
+            if ((Test-Path $link) -and (Get-Item $link -Force).LinkType) {
+                (Get-Item $link -Force).Delete()
+            }
         }
     }
 }
 
 function Invoke-Install {
-    param([string]$Id)
-    $cfg = Resolve-Platform $Id
+    param([string[]]$Ids)
+    $resolved = Expand-Platforms $Ids
     Update-Checkout
-    Write-Host "→ Linking skills for $Id ($($cfg.Style) → $($cfg.Target))"
-    Install-Skills -Target $cfg.Target -Style $cfg.Style
-    Write-Host '→ Linking universal plugin root'
-    if (Test-Path $PluginLink) {
-        Write-Host "  • $PluginLink already exists, leaving as-is"
-    }
-    else {
-        New-DirLink -LinkPath $PluginLink -TargetPath (Join-Path $RepoDir 'forknflush-plugin')
-        Write-Host "  ✓ $PluginLink → $(Join-Path $RepoDir 'forknflush-plugin')"
+    foreach ($id in $resolved) {
+        $cfg = Resolve-Platform $id
+        Write-Host "→ Linking skills for $id ($($cfg.Style) → $($cfg.Target))"
+        Install-Skills -Target $cfg.Target -Style $cfg.Style
     }
     Write-Host ""
-    Write-Host "✓ Installed forknflush for $Id" -ForegroundColor Green
-    Write-Host '  Restart your CLI to pick up the skills.'
-    if ($Id -eq 'claude') {
-        Write-Host ''
-        Write-Host '  Tip: Claude Code can also install this repo directly as a plugin:'
-        Write-Host '       /plugin marketplace add etomoscow/forknflush'
-        Write-Host '       /plugin install forknflush'
-    }
-    if ($Id -eq 'codex') {
-        Write-Host ''
-        Write-Host '  Tip: Codex invokes skills with $ instead of / — type $fork-and-flush, not /fork-and-flush.'
-    }
-    if ($Id -eq 'pi') {
-        Write-Host ''
-        Write-Host '  Tip: Pi invokes skills with /skill:fork-and-flush.'
-    }
-    if ($Id -eq 'hermes') {
-        Write-Host ''
-        Write-Host '  Tip: project-local Hermes skills need `hermes skills trust`; ~/.hermes/skills loads unconditionally.'
-    }
+    Write-Host "✓ Installed forknflush ($($resolved -join ', ')). Restart your CLI to pick up the skill." -ForegroundColor Green
 }
 
 function Invoke-Uninstall {
-    param([string]$Id)
-    $cfg = Resolve-Platform $Id
-    Write-Host "→ Removing skill links for $Id"
-    Remove-Skills -Target $cfg.Target -Style $cfg.Style
-    if ((Test-Path $PluginLink) -and (Get-Item $PluginLink -Force).LinkType) {
-        Remove-Item -Force $PluginLink
-        Write-Host "  ✓ removed $PluginLink"
+    param([string[]]$Ids)
+    $resolved = Expand-Platforms $Ids
+    foreach ($id in $resolved) {
+        $cfg = Resolve-Platform $id
+        Write-Host "→ Removing skill links for $id"
+        Remove-Skills -Target $cfg.Target -Style $cfg.Style
     }
     if (Test-Path $RepoDir) {
         Write-Host ""
@@ -223,12 +229,12 @@ if ($Update) {
 }
 
 if ($Uninstall) {
-    Invoke-Uninstall -Id $Uninstall
+    Invoke-Uninstall -Ids @($Uninstall)
     exit 0
 }
 
-if (-not $Platform) {
-    $Platform = Prompt-Platform
+if (-not $Platform -or $Platform.Count -eq 0) {
+    $Platform = @(Prompt-Platform)
 }
 
-Invoke-Install -Id $Platform
+Invoke-Install -Ids $Platform

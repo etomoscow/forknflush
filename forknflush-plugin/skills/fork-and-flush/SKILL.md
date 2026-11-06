@@ -8,9 +8,9 @@ description: Use for long-horizon optimization tasks with a deterministic scalar
 Single long runs get stuck refining one early approach. Fix: periodically fork K workers from the best workspace, each with an EMPTY chat context, run each briefly, keep the best. Both halves are needed: fork alone or flush alone gives less than both together.
 
 ## Preconditions
-- `$EVAL`: one command printing one scalar, deterministic, higher is better. Record the baseline score. Optional: a target score for early stop.
-- Budget B in one unit: number of `$EVAL` calls or worker-minutes (summed over parallel workers). Wrap `$EVAL` in `.ff/eval.sh`, which appends one line per call to a usage log at an absolute path.
-- Clean git repo, base commit tagged `ff/base`. Copy the grader and its data to `.ff/grader/` outside any worktree.
+- `$EVAL`: one command printing one scalar, deterministic, higher is better (if minimizing cycles, latency, size, or loss, negate the output in `.ff/eval.sh` so higher is always better). Record the baseline score. Optional: a target score for early stop.
+- Budget B in one unit: number of `$EVAL` calls or worker-minutes (summed over parallel workers). Wrap `$EVAL` in `.ff/eval.sh`, which appends one `timestamp\tworktree` line per call to a usage log at an absolute path.
+- Clean git repo, base commit tagged `ff/base`. Add `.ff/` to `.git/info/exclude` so orchestrator state never dirties the repo or gets committed by workers. Copy the grader and its data to `.ff/grader/` outside any worktree.
 - Workers share no mutable state outside their worktree (ports, GPU, caches, output dirs).
 
 ## Schedule
@@ -21,7 +21,7 @@ You are a thin orchestrator: spawn, score, select. Don't do research yourself.
 
 1. Fork: for k in 1..K run `git worktree add -b ff/r<round>-b<k> .ff/r<round>-b<k> <start>`, where start is `ff/base` in round 0, else the leader's best verified commit. Launch the K workers in parallel (subagents or headless CLI), each with a fresh context and the prompt below. Enforce the cap externally (timeout / max turns). If a worker halts early, resume it with "Continue improving the score" until the cap.
 2. Select: for each branch take the commit with the highest claimed `score=`, check it out clean, restore `.ff/grader/`, run `$EVAL`. Use only your own score; if the claim doesn't reproduce, try the next claimed commit. A branch with no commits scores as its start commit.
-3. Winner = best verified score among the K branches and, from round 1 on, the leader's pre-fork best. Ties go to the leader. The winner's worktree becomes the leader's: reset it to the winning commit, remove the other worktrees (keep branches). Append `round, branch, commit, score` to `.ff/ledger.tsv`.
+3. Winner = best verified score among the K branches and, from round 1 on, the leader's pre-fork best. Ties go to the leader. The winner's worktree becomes the single surviving leader worktree: reset it to the winning commit and `git worktree remove --force` every other worktree, including the previous leader's if a new branch won (keep git branches). Append `round, branch, commit, score` to `.ff/ledger.tsv`.
 4. Leader phase: resume the winner's session if possible, otherwise start a fresh worker in the leader worktree. Run until the next trigger, then verify its best commit as in step 2 before forking again.
 5. Stop at B or when the target is reached. Verify the leader the same way. Report the best verified commit across all branches ever created and its score vs baseline.
 
