@@ -18,7 +18,7 @@
 
 ---
 
-![Fork-and-Flush — periodically fork K fresh-context workers from the same workspace and continue from the highest-scoring trajectory](assets/fig_teaser_cartoon.png)
+![Fork-and-Flush — periodically fork K fresh-context workers from the same workspace and continue from the highest-scoring trajectory](assets/fig_teaser_cartoon.pdf)
 
 **Single long agent runs get stuck refining one early approach.** Fork-and-Flush fixes that: periodically fork K workers from the best workspace, each with an EMPTY chat context, run each briefly, keep the best. Both halves are needed — fork alone or flush alone gives less than both together.
 
@@ -44,6 +44,8 @@ Then, on any optimization task:
 ```bash
 /fork-and-flush
 ```
+
+> The repo itself is the plugin marketplace (`.claude-plugin/marketplace.json`) — nothing needs to be uploaded or registered anywhere else; the commands above read it straight from GitHub.
 
 ### Codex, Pi, OpenCode, Hermes Agent (installer)
 
@@ -102,7 +104,7 @@ forknflush-plugin/                 # the plugin
 ├── .claude-plugin/plugin.json
 ├── package.json
 └── skills/fork-and-flush/SKILL.md # the skill (Agent Skills / agentskills.io format)
-assets/                            # teaser figure (PNG for README, PDF source)
+assets/                            # teaser figure (original PDF + PNG render)
 install.sh                         # macOS / Linux installer
 install.ps1                        # Windows installer
 ```
