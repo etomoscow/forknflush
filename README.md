@@ -8,25 +8,29 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow" alt="License: MIT" /></a>
-  <a href="#-quick-start"><img src="https://img.shields.io/badge/Quick_Start-blue" alt="Quick Start" /></a>
-  <a href="#-claude-code-plugin"><img src="https://img.shields.io/badge/Claude_Code-8A2BE2" alt="Claude Code" /></a>
-  <a href="#codex"><img src="https://img.shields.io/badge/Codex-000000" alt="Codex" /></a>
-  <a href="#pi"><img src="https://img.shields.io/badge/Pi-D97706" alt="Pi" /></a>
-  <a href="#hermes-agent"><img src="https://img.shields.io/badge/Hermes_Agent-FFD700" alt="Hermes Agent" /></a>
-  <a href="#opencode"><img src="https://img.shields.io/badge/OpenCode-38bdf8" alt="OpenCode" /></a>
+  <a href="#quick-start"><img src="https://img.shields.io/badge/Quick_Start-blue" alt="Quick Start" /></a>
+  <a href="#claude-code-plugin"><img src="https://img.shields.io/badge/Claude_Code-8A2BE2" alt="Claude Code" /></a>
+  <a href="#platform-notes"><img src="https://img.shields.io/badge/Codex-000000" alt="Codex" /></a>
+  <a href="#platform-notes"><img src="https://img.shields.io/badge/Pi-D97706" alt="Pi" /></a>
+  <a href="#platform-notes"><img src="https://img.shields.io/badge/Hermes_Agent-FFD700" alt="Hermes Agent" /></a>
+  <a href="#platform-notes"><img src="https://img.shields.io/badge/OpenCode-38bdf8" alt="OpenCode" /></a>
 </p>
 
 ---
+
+![Fork-and-Flush — periodically fork K fresh-context workers from the same workspace and continue from the highest-scoring trajectory](assets/fig_teaser_cartoon.png)
 
 **Single long agent runs get stuck refining one early approach.** Fork-and-Flush fixes that: periodically fork K workers from the best workspace, each with an EMPTY chat context, run each briefly, keep the best. Both halves are needed — fork alone or flush alone gives less than both together.
 
 The skill targets long-horizon optimization with a deterministic scalar grader: algorithmic score maximization, cycle-count tuning, model compression. **Not** for bug fixes, features, or tasks without a numeric metric.
 
+This repo implements the *fork-and-flush* periodic intervention from the paper [Fork-and-Flush: Escaping Idea Basins in Autoresearch Agents](https://arxiv.org/abs/2610.07447) (Cai et al., 2026), which showed that independent agent runs plateau at substantially different scores — trajectories stay trapped in localized regions of the solution space, *idea basins* — and that forking into parallel trajectories with fresh chat contexts escapes them (a relative improvement of 66.0% over single runs and 44.4% over best-of-N across 13 long-horizon tasks).
+
 One skill, one `SKILL.md`, packaged as a [Claude Code plugin](https://code.claude.com/docs/en/plugins-reference) and installable into every other major agent CLI.
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Claude Code (plugin)
 
@@ -65,7 +69,7 @@ iex (irm https://raw.githubusercontent.com/etomoscow/forknflush/main/install.ps1
 
 Restart your CLI after installing.
 
-## 🖥 Platform notes
+## Platform notes
 
 | Platform | Skills target | Invoke |
 |---|---|---|
@@ -77,7 +81,7 @@ Restart your CLI after installing.
 
 Manual install (without the installer) — copy `forknflush-plugin/skills/fork-and-flush/` into the target directory above, or symlink it.
 
-## 🧠 What the skill does
+## What the skill does
 
 Given a task with `$EVAL` (one command printing one deterministic scalar, higher is better) and a budget B:
 
@@ -89,7 +93,7 @@ Given a task with `$EVAL` (one command printing one deterministic scalar, higher
 
 Full protocol: [`forknflush-plugin/skills/fork-and-flush/SKILL.md`](forknflush-plugin/skills/fork-and-flush/SKILL.md)
 
-## 📦 Layout
+## Layout
 
 ```
 .claude-plugin/marketplace.json    # repo as a Claude Code plugin marketplace
@@ -98,11 +102,12 @@ forknflush-plugin/                 # the plugin
 ├── .claude-plugin/plugin.json
 ├── package.json
 └── skills/fork-and-flush/SKILL.md # the skill (Agent Skills / agentskills.io format)
+assets/                            # teaser figure (PNG for README, PDF source)
 install.sh                         # macOS / Linux installer
 install.ps1                        # Windows installer
 ```
 
-## ⚙️ Installer management
+## Installer management
 
 ```bash
 ./install.sh                        # prompt for platform
@@ -113,6 +118,25 @@ install.ps1                        # Windows installer
 
 Environment overrides: `FF_REPO_URL` (clone URL), `FF_DIR` (checkout destination).
 
-## 📄 License
+## Citation
+
+If you use fork-and-flush, please cite the paper it is based on:
+
+> Ziyang Cai, Christos Ziakas, Vasilis Kontonis, Tim Pearce, Siddhartha Sen, Akshay Krishnamurthy, Shivam Garg, and Dimitris Papailiopoulos. **Fork-and-Flush: Escaping Idea Basins in Autoresearch Agents.** arXiv:2610.07447 [cs.LG], 2026. [https://arxiv.org/abs/2610.07447](https://arxiv.org/abs/2610.07447) (doi:[10.48550/arXiv.2610.07447](https://doi.org/10.48550/arXiv.2610.07447))
+
+```bibtex
+@misc{cai2026forkandflush,
+  title         = {Fork-and-Flush: Escaping Idea Basins in Autoresearch Agents},
+  author        = {Cai, Ziyang and Ziakas, Christos and Kontonis, Vasilis and Pearce, Tim and Sen, Siddhartha and Krishnamurthy, Akshay and Garg, Shivam and Papailiopoulos, Dimitris},
+  year          = {2026},
+  eprint        = {2610.07447},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG},
+  doi           = {10.48550/arXiv.2610.07447},
+  url           = {https://arxiv.org/abs/2610.07447}
+}
+```
+
+## License
 
 [MIT](LICENSE)
