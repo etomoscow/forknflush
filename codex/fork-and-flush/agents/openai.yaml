@@ -1,3 +1,0 @@
-interface:
-  display_name: "Fork-and-Flush"
-  short_description: "Periodically fork K fresh-context workers from the best workspace; keep the highest verified score."

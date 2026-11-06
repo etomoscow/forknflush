@@ -1,0 +1,15 @@
+{
+  "name": "forknflush",
+  "metadata": {
+    "description": "Fork-and-Flush — escape plateaus on long-horizon optimization tasks by periodically forking K fresh-context workers from the best workspace"
+  },
+  "owner": {
+    "name": "etomoscow"
+  },
+  "plugins": [
+    {
+      "name": "forknflush",
+      "source": "./forknflush-plugin"
+    }
+  ]
+}
